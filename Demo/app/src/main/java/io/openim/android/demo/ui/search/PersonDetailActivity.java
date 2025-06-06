@@ -113,8 +113,8 @@ public class PersonDetailActivity extends BaseActivity<SearchVM, ActivityPersonD
 
         update();
 
-        if (formChat) {
-            conversationId = "single_" + vm.searchContent.getValue();
+        conversationId = "single_" + vm.searchContent.getValue();
+        if (!oneself() && TextUtils.isEmpty(groupId)) {
             view.readVanishLy.setVisibility(View.VISIBLE);
             readVanishSwitch = view.readVanishSwitch;
             boolean on = SharedPreferencesUtil.get(this)
