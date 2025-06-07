@@ -971,6 +971,16 @@ public class ChatVM extends BaseViewModel<ChatVM.ViewAction> implements OnAdvanc
     public long getVanishSecond() {
         long sec = SharedPreferencesUtil.get(BaseApp.inst())
             .getLong(Constants.SP_Prefix_ReadVanishTime + conversationID);
+        if (sec <= 0) {
+            String altKey = Constants.SP_Prefix_ReadVanishTime
+                + (isSingleChat ? "single_" + userID : "group_" + groupID);
+            sec = SharedPreferencesUtil.get(BaseApp.inst()).getLong(altKey);
+            if (sec > 0) {
+                // Migrate old storage key to the new one
+                SharedPreferencesUtil.get(BaseApp.inst())
+                    .setCache(Constants.SP_Prefix_ReadVanishTime + conversationID, sec);
+            }
+        }
         if (sec <= 0) sec = Constants.DEFAULT_VANISH_SECOND;
         return sec;
     }
