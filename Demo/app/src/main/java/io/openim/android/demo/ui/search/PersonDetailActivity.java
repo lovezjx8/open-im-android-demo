@@ -140,11 +140,13 @@ public class PersonDetailActivity extends BaseActivity<SearchVM, ActivityPersonD
             readVanishSwitch.setCheckedWithAnimation(on);
             readVanishSwitch.setOnSlideButtonClickListener(isChecked -> {
                 if (isChecked) {
+                    long sec = SharedPreferencesUtil.get(this)
+                        .getLong(Constants.SP_Prefix_ReadVanishTime + conversationId);
+                    if (sec <= 0) sec = Constants.DEFAULT_VANISH_SECOND;
                     vanishTimeLauncher.launch(new Intent(this, EditTextActivity.class)
                         .putExtra(EditTextActivity.TITLE, getString(io.openim.android.ouicore.R.string.read_vanish))
-                        .putExtra(EditTextActivity.INIT_TXT,
-                            String.valueOf(SharedPreferencesUtil.get(this)
-                                .getLong(Constants.SP_Prefix_ReadVanishTime + conversationId, Constants.DEFAULT_VANISH_SECOND)))
+                        .putExtra(EditTextActivity.INIT_TXT, String.valueOf(sec))
+
                         .putExtra(EditTextActivity.MAX_LENGTH, 4));
                 } else {
                     SharedPreferencesUtil.get(this)
