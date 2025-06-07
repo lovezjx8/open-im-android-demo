@@ -118,6 +118,37 @@ public class ChatVM extends BaseViewModel<ChatVM.ViewAction> implements OnAdvanc
     private Timer banTimer;
     //阅后即焚计时器
     private final Map<String, Timer> vanishTimerMap = new HashMap<>();
+    //阅后即焚结束时间
+    private final Map<String, Long> vanishEndTimeMap = new HashMap<>();
+    private boolean vanishUpdating = false;
+    private final Runnable vanishRunnable = new Runnable() {
+        @Override
+        public void run() {
+            long now = System.currentTimeMillis();
+            boolean needContinue = false;
+            for (int i = 0; i < messages.val().size(); i++) {
+                Message m = messages.val().get(i);
+                Long end = vanishEndTimeMap.get(m.getClientMsgID());
+                if (null == end) continue;
+                long remain = (end - now) / 1000;
+                MsgExpand expand = (MsgExpand) m.getExt();
+                if (null == expand) expand = new MsgExpand();
+                if (remain > 0) {
+                    expand.vanishCountDown = remain;
+                    needContinue = true;
+                } else {
+                    expand.vanishCountDown = 0;
+                }
+                m.setExt(expand);
+                messageAdapter.notifyItemChanged(i);
+            }
+            if (needContinue) {
+                UIHandler.postDelayed(this, 1000);
+            } else {
+                vanishUpdating = false;
+            }
+        }
+    };
     //回复消息
     public State<Message> replyMessage = new State<>();
     //通知消息
@@ -402,6 +433,9 @@ public class ChatVM extends BaseViewModel<ChatVM.ViewAction> implements OnAdvanc
         IMEvent.getInstance().removeUserListener(this);
         for (Timer t : vanishTimerMap.values()) t.cancel();
         vanishTimerMap.clear();
+        vanishEndTimeMap.clear();
+        UIHandler.removeCallbacks(vanishRunnable);
+        vanishUpdating = false;
         inputMsg.removeObserver(inputObserver);
     }
 
@@ -902,6 +936,7 @@ public class ChatVM extends BaseViewModel<ChatVM.ViewAction> implements OnAdvanc
             messageAdapter.getMessages().remove(index);
             messageAdapter.notifyItemRemoved(index);
             enableMultipleSelect.setValue(false);
+            vanishEndTimeMap.remove(message.getClientMsgID());
         }
     }
 
@@ -909,11 +944,11 @@ public class ChatVM extends BaseViewModel<ChatVM.ViewAction> implements OnAdvanc
         try {
             if (null == message.getAttachedInfoElem() || !message.getAttachedInfoElem().isPrivateChat())
                 return;
-            long sec = SharedPreferencesUtil.get(BaseApp.inst())
-                .getLong(Constants.SP_Prefix_ReadVanishTime + conversationID);
-            if (sec <= 0) sec = Constants.DEFAULT_VANISH_SECOND;
+            long sec = getVanishSecond();
 
             if (sec <= 0) return;
+            long end = System.currentTimeMillis() + sec * 1000;
+            vanishEndTimeMap.put(message.getClientMsgID(), end);
             Timer timer = new Timer();
             vanishTimerMap.put(message.getClientMsgID(), timer);
             timer.schedule(new TimerTask() {
@@ -922,8 +957,32 @@ public class ChatVM extends BaseViewModel<ChatVM.ViewAction> implements OnAdvanc
                     UIHandler.post(() -> deleteMessageFromLocalStorage(message));
                 }
             }, sec * 1000);
+            startVanishUpdate();
         } catch (Exception ignored) {
         }
+    }
+
+    private void startVanishUpdate() {
+        if (vanishUpdating) return;
+        vanishUpdating = true;
+        UIHandler.post(vanishRunnable);
+    }
+
+    public long getVanishSecond() {
+        long sec = SharedPreferencesUtil.get(BaseApp.inst())
+            .getLong(Constants.SP_Prefix_ReadVanishTime + conversationID);
+        if (sec <= 0) {
+            String altKey = Constants.SP_Prefix_ReadVanishTime
+                + (isSingleChat ? "single_" + userID : "group_" + groupID);
+            sec = SharedPreferencesUtil.get(BaseApp.inst()).getLong(altKey);
+            if (sec > 0) {
+                // Migrate old storage key to the new one
+                SharedPreferencesUtil.get(BaseApp.inst())
+                    .setCache(Constants.SP_Prefix_ReadVanishTime + conversationID, sec);
+            }
+        }
+        if (sec <= 0) sec = Constants.DEFAULT_VANISH_SECOND;
+        return sec;
     }
 
 

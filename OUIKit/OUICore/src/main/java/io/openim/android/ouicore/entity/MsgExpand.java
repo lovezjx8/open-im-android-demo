@@ -17,4 +17,7 @@ public class MsgExpand {
     public boolean isShowTime;
     //富文本
     public transient SpannableStringBuilder sequence;
+
+    // Remaining seconds for burn after reading
+    public long vanishCountDown;
 }
