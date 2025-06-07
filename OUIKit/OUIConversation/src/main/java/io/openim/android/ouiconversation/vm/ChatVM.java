@@ -634,12 +634,14 @@ public class ChatVM extends BaseViewModel<ChatVM.ViewAction> implements OnAdvanc
         if (list.isEmpty()) {
             IMUtil.calChatTimeInterval(data);
             messages.setValue(data);
+            scheduleLoadedVanish(data);
             return;
         }
         if (isReverse) {
             list.addAll(0, data);
             IMUtil.calChatTimeInterval(list);
             messageAdapter.notifyItemRangeInserted(0, data.size());
+            scheduleLoadedVanish(list.subList(0, data.size()));
             return;
         }
         removeLoading(list);
@@ -647,6 +649,7 @@ public class ChatVM extends BaseViewModel<ChatVM.ViewAction> implements OnAdvanc
         IMUtil.calChatTimeInterval(list);
         list.add(loading);
         messageAdapter.notifyItemRangeChanged(list.size() - 1 - data.size(), list.size() - 1);
+        scheduleLoadedVanish(list);
     }
 
 
@@ -937,6 +940,8 @@ public class ChatVM extends BaseViewModel<ChatVM.ViewAction> implements OnAdvanc
             messageAdapter.notifyItemRemoved(index);
             enableMultipleSelect.setValue(false);
             vanishEndTimeMap.remove(message.getClientMsgID());
+            Timer t = vanishTimerMap.remove(message.getClientMsgID());
+            if (t != null) t.cancel();
         }
     }
 
@@ -947,7 +952,19 @@ public class ChatVM extends BaseViewModel<ChatVM.ViewAction> implements OnAdvanc
             long sec = getVanishSecond();
 
             if (sec <= 0) return;
-            long end = System.currentTimeMillis() + sec * 1000;
+            if (vanishTimerMap.containsKey(message.getClientMsgID())) return;
+
+            long readTime = message.getAttachedInfoElem().getHasReadTime();
+            if (readTime <= 0) {
+                readTime = System.currentTimeMillis();
+                message.getAttachedInfoElem().setHasReadTime(readTime);
+            }
+            long end = readTime + sec * 1000;
+            long delay = end - System.currentTimeMillis();
+            if (delay <= 0) {
+                deleteMessageFromLocalStorage(message);
+                return;
+            }
             vanishEndTimeMap.put(message.getClientMsgID(), end);
             Timer timer = new Timer();
             vanishTimerMap.put(message.getClientMsgID(), timer);
@@ -956,7 +973,7 @@ public class ChatVM extends BaseViewModel<ChatVM.ViewAction> implements OnAdvanc
                 public void run() {
                     UIHandler.post(() -> deleteMessageFromLocalStorage(message));
                 }
-            }, sec * 1000);
+            }, delay);
             startVanishUpdate();
         } catch (Exception ignored) {
         }
@@ -966,6 +983,20 @@ public class ChatVM extends BaseViewModel<ChatVM.ViewAction> implements OnAdvanc
         if (vanishUpdating) return;
         vanishUpdating = true;
         UIHandler.post(vanishRunnable);
+    }
+
+    private void scheduleLoadedVanish(List<Message> msgs) {
+        for (Message m : msgs) {
+            try {
+                if (null != m.getAttachedInfoElem()
+                    && m.getAttachedInfoElem().isPrivateChat()
+                    && m.getAttachedInfoElem().getHasReadTime() > 0
+                    && !vanishTimerMap.containsKey(m.getClientMsgID())) {
+                    scheduleVanish(m);
+                }
+            } catch (Exception ignored) {
+            }
+        }
     }
 
     public long getVanishSecond() {
