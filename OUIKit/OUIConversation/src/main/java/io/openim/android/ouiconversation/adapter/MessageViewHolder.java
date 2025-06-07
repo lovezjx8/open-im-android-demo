@@ -179,6 +179,7 @@ public class MessageViewHolder {
             hName();
             showTime(msgExpand);
             hSendState();
+            hReadVanish(msgExpand);
         }
 
         public void hFirstItem(int position) {
@@ -199,6 +200,20 @@ public class MessageViewHolder {
                         chatVM.sendMsg(message, true);
                     }
                 });
+            }
+        }
+
+        private void hReadVanish(MsgExpand msgExpand) {
+            TextView tv = isOwn ? itemView.findViewById(R.id.readVanishNum2)
+                : itemView.findViewById(R.id.readVanishNum);
+            if (null == tv) return;
+            if (null != message.getAttachedInfoElem()
+                && message.getAttachedInfoElem().isPrivateChat()
+                && msgExpand != null && msgExpand.vanishCountDown > 0) {
+                tv.setVisibility(View.VISIBLE);
+                tv.setText(String.valueOf(msgExpand.vanishCountDown));
+            } else {
+                tv.setVisibility(View.GONE);
             }
         }
 
